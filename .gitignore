@@ -1,0 +1,4 @@
+pyproject.toml
+__pycache__
+__avg__
+*.bsp
