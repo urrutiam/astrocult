@@ -27,8 +27,8 @@ Compute all declinations for the year 2000 from a latitude of 45 N, longitude of
 ``` 
 df_dec = dec.calculate_declinations_for_entire_year(2000, 45, 23, 100)
 
-print ("Declination on January 1: " , df[0])
-print ("Declination on December 31: " , df[366]) # 2000 is a leap year.
+print ("Declination on January 1: " , df_dec[0])
+print ("Declination on December 31: " , df_dec[366]) # 2000 is a leap year.
 ```
 
 Plot the declination curvigram for the latitude of 45 N for a list of declinations [23,22,23.5] with associated bin widths [0.1,0.2,0.3]:
