@@ -13,14 +13,11 @@ import matplotlib.pyplot as plt
 
 from skyfield.api import load, wgs84
 
-import JulianHelper
-import HelperFunctions
+import JulianHelper as JulianHelper
+import HelperFunctions as HelperFunctions
 
 class Declination:
-    """ Class containing declination related utility functions. You will find
-    here methods that:
-    - Provide True equator/equinox declination and J2000 (for comparison with 
-                                                          Stellarium).
+    """ Class containing declination related utility functions.
     
     Requirements: skyfield, pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """

@@ -5,12 +5,11 @@ from scipy import integrate
 from numpy.random import Generator
 import matplotlib.pyplot as plt
 
-import HelperFunctions
+import JulianHelper as JulianHelper
+import HelperFunctions as HelperFunctions
 
 class Azimuth:
-    """ Class containing azimuth related utility functions. You will find
-    here methods that:
-    - 
+    """ Class containing azimuth related utility functions.
     
     Requirements: pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """

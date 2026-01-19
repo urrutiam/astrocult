@@ -15,7 +15,7 @@ import datetime
 import os
 import webbrowser
 
-import Declination
+import Declination as Declination
 
 class GeoUtils:
   """ Contains a set of methods for dealing with astronomical computations

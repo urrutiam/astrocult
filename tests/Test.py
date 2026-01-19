@@ -11,14 +11,10 @@ import math
 
 
 import sys
-sys.path.append("C:/Users/USER/Downloads/archaeoastropy/src/archeaoastropy")
+sys.path.append("C:/Users/USER/Documents/GitHub/astrocult/src/")
 
 
-
-from JulianHelper import JulianHelper
-import Declination as Declination
-import Azimuth as Azimuth
-import GeoUtils as GeoUtils
+from astrocult import Azimuth, Declination, GeoUtils, JulianHelper
 
 def test_declination():
     """Unit tests for the Declination class"""
@@ -31,7 +27,7 @@ def test_declination():
 def test_julianhelper():
     """Unit tests for the JulianHelper class"""
     
-    jh = JulianHelper()
+    jh = JulianHelper.JulianHelper()
     
     julian_dates = [None, datetime.datetime(1500,1,1), datetime.datetime(2000,1,1)]
 
