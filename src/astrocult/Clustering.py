@@ -228,9 +228,11 @@ class Clustering:
         model = KMeans(n_clusters=n_clusters, random_state=10)
         model.fit(df_norm)
         
-        df['kmeans-clusters'] = model.labels_
+        df2 = df.copy()
+        
+        df2['kmeans-clusters'] = model.labels_
           
-        return model, df
+        return model, df2
 
     
     def create_hierachical_clusters(self, 
@@ -239,11 +241,11 @@ class Clustering:
                                     distance_threshold: float=None, 
                                     plot_clusters: bool=True,
                                     metric: str="manhattan",
-                                    linkage: str="complete") -> AgglomerativeClustering:
+                                    linkage: str="complete",
+                                    compute_distances: bool=True) -> AgglomerativeClustering:
         '''
         Groups the dataframe points into clusters using an Agglomerative clustering method.
         For now it uses `linkage=complete`. Data is normalized using `self.__normalize_data`.
-        
         Parameters
         ----------
         df : pd.Dataframe
@@ -260,7 +262,9 @@ class Clustering:
         linkage : str
             Cluster linkage mode. Default: complete. For possible values see 
             `sklearn.cluster.AgglomerativeClustering`
-            
+        compute_distances : bool
+            Default: True. See `sklearn.cluster.AgglomerativeClustering` for
+            details
         Returns
         -------
         Tuple
@@ -278,21 +282,17 @@ class Clustering:
         
         if df is None:
             raise ValueError("The dataframe cannot be None.")
-        if distance_threshold != None and n_clusters != None:
-            raise ValueError("`n_clusters` must be None if `distance_threshold` is not None.")
-            
-        compute_distances = False
-        if distance_threshold != None and n_clusters == None:
-            compute_distances = True
-                
+
         df_norm = self.__normalize_data(df)
         
-        model = AgglomerativeClustering(distance_threshold=None, n_clusters=n_clusters, metric=metric, compute_distances=compute_distances, linkage=linkage)
+        model = AgglomerativeClustering(distance_threshold=distance_threshold, n_clusters=n_clusters, metric=metric, compute_distances=compute_distances, linkage=linkage)
         model = model.fit(df_norm)
-          
-        df['hierarchical-clusters'] = model.labels_
+         
+        df2 = df.copy()
         
-        return model, df
+        df2['hierarchical-clusters'] = model.labels_
+        
+        return model, df2
 
     def show_clusters(self,
                       df: pd.DataFrame, 
@@ -344,6 +344,7 @@ class Clustering:
                         **kwargs):
         '''
         Displays the dendogram of the agglomerative clustering model.
+        This function requires that the model is build with `compute_distances=True`.
         
         Parameters
         ----------
@@ -358,7 +359,7 @@ class Clustering:
         
         '''
         
-        if not model.__class__ == 'sklearn.cluster._kmeans.AgglomerativeClustering': 
+        if type(model) != AgglomerativeClustering: 
             raise ValueError("`model` must be of type sklearn.cluster.AgglomerativeClustering")
         
         # Create linkage matrix and then plot the dendrogram

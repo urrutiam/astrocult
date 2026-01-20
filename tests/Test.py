@@ -8,7 +8,7 @@ Created on Thu Jan  8 10:05:20 2026
 import datetime
 import math
 import pandas as pd
-
+import sklearn
 import sys
 sys.path.append("C:/Users/USER/Documents/GitHub/astrocult/src/")
 
@@ -125,6 +125,9 @@ def test_geoutils():
     gu.show_heatmap(df, [vatinLat, vatinLon, vatinError], targetGeoLocations, [vatinLat, vatinLon], 11, 4)  
     
 def test_clustering():
+    
+    print('The scikit-learn version is {}.'.format(sklearn.__version__))
+    
     data = {'Lat':[45.1, 44.9, 45.2, 44.8],
             'Lon':[23.2, 23.3, 23.1, 23.3],
         'Declination': [20, -21, 19, -18]}
@@ -145,7 +148,9 @@ def test_clustering():
     
     clustering.show_clusters(df_kmeans, ['Lat', 'Lon'], kmeans_model)
         
-    hierarchical_model, df_hierarchical = clustering.create_hierachical_clusters(df, 2)
+    hierarchical_model, df_hierarchical = clustering.create_hierachical_clusters(df, distance_threshold=0)
+    
+    print(df_hierarchical)
     
     clustering.show_clusters(df_hierarchical, ['Lat', 'Lon'], hierarchical_model)
     
