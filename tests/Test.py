@@ -126,8 +126,6 @@ def test_geoutils():
     
 def test_clustering():
     
-    print('The scikit-learn version is {}.'.format(sklearn.__version__))
-    
     data = {'Lat':[45.1, 44.9, 45.2, 44.8],
             'Lon':[23.2, 23.3, 23.1, 23.3],
         'Declination': [20, -21, 19, -18]}
