@@ -7,14 +7,12 @@ Created on Thu Jan  8 10:05:20 2026
 
 import datetime
 import math
-
-
+import pandas as pd
 
 import sys
 sys.path.append("C:/Users/USER/Documents/GitHub/astrocult/src/")
 
-
-from astrocult import Azimuth, Declination, GeoUtils, JulianHelper
+from astrocult import Azimuth, Declination, GeoUtils, JulianHelper, Clustering
 
 def test_declination():
     """Unit tests for the Declination class"""
@@ -124,10 +122,38 @@ def test_geoutils():
     gu.plot_error_heatmap_histogram(df)
     
     json_heatmap, json_targets = gu.build_geojson_from_heatmap(df, [[vatinLat, vatinLon, vatinError]], targetGeoLocations)
-    gu.show_heatmap(df, [vatinLat, vatinLon, vatinError], targetGeoLocations, [vatinLat, vatinLon], 11, 4)    
+    gu.show_heatmap(df, [vatinLat, vatinLon, vatinError], targetGeoLocations, [vatinLat, vatinLon], 11, 4)  
+    
+def test_clustering():
+    data = {'Lat':[45.1, 44.9, 45.2, 44.8],
+            'Lon':[23.2, 23.3, 23.1, 23.3],
+        'Declination': [20, -21, 19, -18]}
+
+    df = pd.DataFrame(data)
+         
+    clustering = Clustering.Clustering()
+    
+    df_pca, pca_components = clustering.create_PCA(df, 2)
+    
+    clustering.show_PCA_correlation_matrix(pca_components)
+    
+    #kmeans_optimum_no_clusters = clustering.get_optimal_number_of_kmeans_clusters(df_norm)
+    
+    kmeans_model, df_kmeans = clustering.create_kmeans_clusters(df, 2)
+    
+    print(df_kmeans)
+    
+    clustering.show_clusters(df_kmeans, ['Lat', 'Lon'], kmeans_model)
         
+    hierarchical_model, df_hierarchical = clustering.create_hierachical_clusters(df, 2)
+    
+    clustering.show_clusters(df_hierarchical, ['Lat', 'Lon'], hierarchical_model)
+    
+    clustering.show_dendrogram(hierarchical_model)
+    
 if __name__ == "__main__":
-    test_julianhelper()
-    test_declination()
-    test_azimuth()
-    test_geoutils()
+    #test_julianhelper()
+    #test_declination()
+    #test_azimuth()
+    #test_geoutils()
+    test_clustering()
