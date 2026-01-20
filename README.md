@@ -163,6 +163,7 @@ json_heatmap, json_targets = gu.build_geojson_from_heatmap(df, [[vatinLat, vatin
 ### Clustering functions
 
 We first need some data with multiple features (characteristics/properties). The package works with dataframes so we need to convert our data to one. 
+Clustering is useful when we want to see if certain datapoints (i.e., locations) form distinct groups.
 
 ```
 data = {'Lat':[45.1, 44.9, 45.2, 44.8],
