@@ -160,3 +160,64 @@ As well as exporting the heatmap as geojson files that we can later import in GI
 ```
 json_heatmap, json_targets = gu.build_geojson_from_heatmap(df, [[vatinLat, vatinLon, vatinError]], targetGeoLocations)
 ```
+### Clustering functions
+
+We first need some data with multiple features (characteristics/properties). The package works with dataframes so we need to convert our data to one. 
+
+```
+data = {'Lat':[45.1, 44.9, 45.2, 44.8],
+        'Lon':[23.2, 23.3, 23.1, 23.3],
+        'Declination': [20, -21, 19, -18]}
+
+df = pd.DataFrame(data)
+```
+
+Initialize the Clustering object:
+        
+```
+clustering = Clustering.Clustering()
+```
+
+Now we can start performing some clustering on data points (grouping of data based on the features).
+
+If we have many features we can reduce them by using Principal Component Analysis. Here we reduce all data to 2 dimensions (features).
+
+```
+df_pca, pca_components = clustering.create_PCA(df, 2)
+```
+
+We can show the correlation matrix outlying the importance of each original feature in the newly created ones:
+
+```
+clustering.show_PCA_correlation_matrix(pca_components)
+```
+
+We can cluster together data points. We can use either KMeans or Agglomerative (hierarchical) clustering.
+
+KMeans:
+
+```
+# For KMeans we need to guess the number of clusters. However, there are ways of computing the optimal number. Uncomment the next line (you will need a bigger dataset) if you want to use this feature.
+#kmeans_optimum_no_clusters = clustering.get_optimal_number_of_kmeans_clusters(df_norm)    
+kmeans_model, df_kmeans = clustering.create_kmeans_clusters(df, 2)
+    
+print(df_kmeans)
+    
+clustering.show_clusters(df_kmeans, ['Lat', 'Lon'], kmeans_model)
+```
+
+Agglomerative clustering:
+
+```
+hierarchical_model, df_hierarchical = clustering.create_hierachical_clusters(df, distance_threshold=0)
+    
+print(df_hierarchical)
+    
+clustering.show_clusters(df_hierarchical, ['Lat', 'Lon'], hierarchical_model)
+```
+
+For hierarchical clusters we can also show the dendogram, i.e., how clusters relate to each other:
+
+```
+clustering.show_dendrogram(hierarchical_model)
+```
