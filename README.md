@@ -11,7 +11,7 @@ Is a python package providing basic functionality for archaeoastronomy analysis.
 Import the modules:
 
 ```
-from astrocult import Azimuth, Declination, GeoUtils, JulianHelper
+from astrocult import Azimuth, Declination, GeoUtils, JulianHelper, Clustering
 ```
 
 ### Declination functions
