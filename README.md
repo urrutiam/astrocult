@@ -11,7 +11,7 @@ Is a python package providing basic functionality for archaeoastronomy analysis.
 Import the modules:
 
 ```
-from astrocult import Azimuth, Declination, GeoUtils, JulianHelper, Clustering
+from astrocult import Azimuth, Declination, Altitude, GeoUtils, JulianHelper, Clustering
 ```
 
 ### Declination functions
@@ -20,6 +20,12 @@ Get a reference to our Declination object:
 
 ```
 dec = Declination.Declination()
+```
+
+Compute the declination error for a given latitude location and orientation (azimuth, altitude). It can be used to account for the uncertainty in the orientation:
+
+```
+dec.err_decl(45, 125, 0)
 ```
 
 Compute all declinations for the year 2000 from a latitude of 45 N, longitude of 23 E and elevation of 100 meters:
@@ -37,6 +43,12 @@ Plot the declination curvigram for the latitude of 45 N for a list of declinatio
 dec.plot_decl_adaptive([23,22,23.5], 45, [0.1,0.2,0.3])
 ```
 
+Plot a density diagram / frequency map to explore how declinations changed over time:
+
+```
+dec.plot_fmap(...)
+```
+
 ### Azimuth functions
 
 While in practice we prefer declinations, there are cases when azimuths can still be used.
@@ -47,10 +59,50 @@ Get a reference to our Azimuth object:
 az = Azimuth.Azimuth()
 ```
 
+Compute the azimuths reading error for successive measurements of a single site (in a single direction):
+
+```
+az.err_az([124.5, 125, 125.5, 124])
+```
+
 Plot the azimuth curvigram for the latitude of 45 N for a list of declinations [23,22,23.5] with associated bin widths [0.1,0.2,0.3]:
 
 ```
 az.plot_az_adaptive([23,22,23.5], 45, [0.1,0.2,0.3])
+```
+
+### Altitude functions
+
+Get a reference to our Altitude object:
+
+```
+alt = Altitude.Altitude()
+```
+
+Update the altitude measurement to account for atmospheric refraction:
+
+```
+alt.update_alt_by_atmospheric_refraction(1)
+```
+
+Compute the altitude error considering the systematic instrument/reading error and the atmospheric refraction. It can be used to account for the uncertainty in the orientation:
+
+```
+alt.err_alt(1, err_alt=0.5))
+```
+
+### Getting the magnetic declination of a location
+
+Get a reference to our GeoUtils object:
+
+```
+gu = GeoUtils.GeoUtils()
+```
+
+Retrieve from NOAA the magnetic declination together with the magnetic uncertainty. You can use this value to compute the true azimuths from azimuths taken with a magnetic compass: 
+
+```
+md, md_unc = get_magnetic_declination(45, 25, 2025,6 , 21)
 ```
 
 ### Error heatmaps and location probability
