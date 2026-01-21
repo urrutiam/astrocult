@@ -40,7 +40,7 @@ print ("Declination on December 31: " , df_dec[366]) # 2000 is a leap year.
 Plot the declination curvigram for the latitude of 45 N for a list of declinations [23,22,23.5] with associated bin widths [0.1,0.2,0.3]:
 
 ```
-dec.plot_decl_adaptive([23,22,23.5], 45, [0.1,0.2,0.3])
+dec.plot_decl_adaptive([23, 22, 23.5], 45, [0.1, 0.2, 0.3])
 ```
 
 Plot a density diagram / frequency map to explore how declinations changed over time:
@@ -68,7 +68,7 @@ az.err_az([124.5, 125, 125.5, 124])
 Plot the azimuth curvigram for the latitude of 45 N for a list of declinations [23,22,23.5] with associated bin widths [0.1,0.2,0.3]:
 
 ```
-az.plot_az_adaptive([23,22,23.5], 45, [0.1,0.2,0.3])
+az.plot_az_adaptive([23, 22, 23.5], 45, [0.1, 0.2, 0.3])
 ```
 
 ### Altitude functions
@@ -102,7 +102,7 @@ gu = GeoUtils.GeoUtils()
 Retrieve from NOAA the magnetic declination together with the magnetic uncertainty. You can use this value to compute the true azimuths from azimuths taken with a magnetic compass: 
 
 ```
-md, md_unc = get_magnetic_declination(45, 25, 2025,6 , 21)
+md, md_unc = gu.get_magnetic_declination(45, 25, 2025, 6 , 21)
 ```
 
 ### Error heatmaps and location probability
