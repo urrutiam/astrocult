@@ -15,13 +15,64 @@ import datetime
 import os
 import webbrowser
 
+from urllib.request import urlopen
+
+
 import Declination as Declination
 
 class GeoUtils:
   """ Contains a set of methods for dealing with astronomical computations
   based on geographical coordinates.
   """
-
+  
+  def get_magnetic_declination(self, 
+                           lat: float,
+                           lon: float) -> tuple[float, float]:
+      """      
+      Uses the NOAA services to automatically retrieve the magnetic declination
+      for a given location. It uses the WMM model (2024-2029). The service has 
+      an access limit so it is advised not to overuse it.
+      The returned magnetic declination can be added to the magnetic azimuth
+      to obtain the true azimuth which can than be used for plotting or for 
+      computing the astronomical declination.
+      
+      Parameters   
+      lat:float
+          The latitude of the location
+      lon:float
+          The longitude of the location
+          
+      Returns
+      tuple 
+          The magnetic declination
+          The magnetic declination uncertainty
+          
+      Raises
+          ValueError if any of the arguments is None or outside their range
+      """  
+      
+      if None in [lat, lon]:
+          raise ValueError("One of the arguments is None.") 
+      if not (-90 <= lat <= 90):
+          raise ValueError("The latitude should be between -90 and 90.")   
+      if not (-180 <= lon <= 180):
+          raise ValueError("The longitude should be between -180 and 180.") 
+      
+      url = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?lat1=" + str(lat) + "&lon1=" + str(lon) + "&key=zNEw7&resultFormat=csv" 
+      
+      f = urlopen(url)
+      response = f.read().decode('utf-8')
+      
+      data_line = response.strip().split("\n")[-1]
+                 
+      try:
+          md = float(data_line.split(",")[4])
+          md_unc = float(data_line.split(",")[6])
+       
+          return md, md_unc
+      except Exception:
+          raise Exception("Error parsing response from https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination. The server might be busy or the response format is different to what is accepted.")
+          
   def get_bearing(self, lat1:float, lat2:float, lon1:float, lon2:float) -> float:
     """ Computes the azimuth in degrees from (lat1, lon1) towards (lat2, lon2).
 

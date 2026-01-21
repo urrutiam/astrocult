@@ -4,8 +4,10 @@ import numpy as np
 from scipy import integrate
 from numpy.random import Generator
 import matplotlib.pyplot as plt
+import math
 
-import JulianHelper as JulianHelper
+from multipledispatch import dispatch
+
 import HelperFunctions as HelperFunctions
 
 class Azimuth:
@@ -14,6 +16,32 @@ class Azimuth:
     Requirements: pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """
     
+    def err_az(self, 
+               azimuths: list,
+               err_az: float=0.5) -> float:
+        """ Calculates the error from a set of azimuth readings for a given
+        orientation based on the systematic error `err_az` as well as the standard
+        deviation of the readings.
+               
+        Parameters   
+        azimuths:list
+            A set of azimuth readings. Can be magnetic or true azimuths
+        err_az:float
+            The error in the altitude reading. Can be the error of the instrument, 
+            the reading error, or both. Default=0.5 degrees
+        Returns
+            The azimuths' error in degrees
+            
+        Raises
+            ValueError if `azimuths` is None
+        """    
+        
+        if azimuths is None:
+            raise ValueError("`azimuths` cannot be None.")
+
+        return math.sqrt(err_az**2 + math.stddev(azimuths)**2)
+    
+    @dispatch(float, float, float, bool)
     def calc_az(self, altitude_deg: float, 
                   latitude_deg: float, 
                   declination_deg: float, 
@@ -71,6 +99,74 @@ class Azimuth:
 
         return float(np.degrees(azimuth_rad) % 360.0)
      
+    @dispatch(float, float, float)    
+    def calc_az(self, altitude_deg: float, 
+                  latitude_deg: float, 
+                  declination_deg: float) -> tuple[float, float]:
+        """Solar azimuth angle in degrees (range [0, 360)). Since for a given 
+        declination we can have either an east or west orientation the function
+        returns two values, first for the east azimuth, second for the west
+        azimuth. The user should pick whichever is relevant in their case.
+        
+        Parameters
+        ----------
+        altitude_deg : float
+            The altitude in degrees
+        latitude_deg : float
+            The latitude in degrees
+        declination_deg : float
+            The declination in degrees
+            
+        Returns
+        -------
+        tuple
+            Azimuth values for east and west declinations. In both cases the 
+            same horizon altitude is considered
+
+        Raises
+        ------
+        ValueError
+            If a None value has been provided in any of the arguments,
+            or the values are out of range
+        """
+        
+        if None in [altitude_deg, latitude_deg, declination_deg]:
+            raise ValueError("One of the arguments is None.") 
+        if not (-90 <= latitude_deg <= 90):
+            raise ValueError("The latitude should be between -90 and 90.")   
+        if not (-90 <= altitude_deg <= 90):
+            raise ValueError("The altitude should be between -90 and 90.") 
+        if not (-90 <= declination_deg <= 90):
+            raise ValueError("The declination should be between -90 and 90.") 
+
+        lat = math.radians(latitude_deg)
+        h   = math.radians(altitude_deg)
+        dec = math.radians(declination_deg)
+    
+        # Hour angle
+        cosH = (math.sin(h) - math.sin(lat) * math.sin(dec)) / \
+               (math.cos(lat) * math.cos(dec))
+    
+        cosH = max(-1.0, min(1.0, cosH))
+    
+        H = math.acos(cosH)  # absolute value
+    
+        # azimuth cosine
+        cosA = (math.sin(dec) - math.sin(lat) * math.sin(h)) / \
+               (math.cos(lat) * math.cos(h))
+    
+        cosA = max(-1.0, min(1.0, cosA))
+    
+        # East (H negative → azimuth < 180°)
+        sinA_E = -math.cos(dec) * math.sin(-H) / math.cos(h)
+        A_E = math.degrees(math.atan2(sinA_E, cosA)) % 360
+    
+        # West (H positive → azimuth > 180°)
+        sinA_W = -math.cos(dec) * math.sin(H) / math.cos(h)
+        A_W = math.degrees(math.atan2(sinA_W, cosA)) % 360
+    
+        return A_E, A_W
+
     def curvigram_az_adaptive(self,
         azimuths: np.ndarray[float],
         binwidths: np.ndarray[float],                # per-sample bandwidth (degrees)
@@ -386,7 +482,7 @@ class Azimuth:
         ref_lines = []
         
         for eps in (obliquity_deg, -obliquity_deg):
-            a = self.calc_az(0, latitude, obliquity_deg, True)
+            a = self.calc_az(float(0), float(latitude), obliquity_deg, True)
             ref_lines.append(a)
         ref_lines.append(90)
         ref_lines.append(270)

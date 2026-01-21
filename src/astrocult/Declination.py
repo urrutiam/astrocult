@@ -5,6 +5,7 @@ import numpy as np
 from numpy.random import Generator
 
 from scipy import integrate
+from scipy.stats import gaussian_kde
 import datetime
 from  datetime import timedelta
 import math
@@ -22,7 +23,59 @@ class Declination:
     Requirements: skyfield, pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """
     
-    EPHEM_FILES = ['de431_part-1.bsp', 'de431_part-2.bsp']
+    #EPHEM_FILES = ['de431_part-1.bsp', 'de431_part-2.bsp']
+    
+    def err_decl(self, 
+                 lat:float, 
+                 az:float, 
+                 alt:float, 
+                 err_az:float=0.5, 
+                 err_alt:float=0.5) -> float:
+        """ Calculates the declination error based on the error considered when
+        calculating the azimuth and horizon altitude.
+               
+        Parameters
+        lat:float
+            The observer's latitude in degrees
+        az:float
+            The object's azimuth as observed from `lat`            
+        alt:float
+            The object's altitude in degrees
+        err_az:float
+            The error in the azimuth reading. Can be the error of the instrument, 
+            the reading error, or both. Default=0.5 degrees
+        err_alt:float
+            The error in the altitude reading. Can be the error of the instrument, 
+            the reading error, or both. Default=0.5 degrees. See `GeoUtils.err_alt()` for 
+            details on how you can compute the value automatically from `alt`
+            
+        Returns
+            The declination error in degrees
+            
+        Raises
+            ValueError if any of the arguments is None or outside their value range
+        """        
+        
+        if None in [lat, az, alt, err_az, err_alt]:
+            raise ValueError("Arguments should not be None.")
+        if not (-90 <= lat <= 90):
+            raise ValueError("The `lat` should be between -90 and 90.")   
+        if not (-90 <= alt <= 90):
+            raise ValueError("The `alt` should be between -90 and 90")        
+        if not (0 <= az <= 360):
+            raise ValueError("The `az` should be between 0 and 360")    
+        
+        az = np.radians(az)
+        alt = np.radians(alt)
+        lat = np.radians(lat)
+        
+        decl = self.calc_decl(lat, alt, az)
+        
+        der_alt = (np.sin(lat) * np.cos(alt) - np.cos(lat) * np.cos(az) * np.sin(alt)) / np.sqrt(1 - ((np.sin(np.radians(decl)))**2))
+        der_az = -np.cos(lat) * np.sin(az) * np.cos(alt) / np.sqrt(1 - ((np.sin(np.radians(decl)))**2))
+        err_decl = np.abs(der_alt)*err_alt + np.abs(der_az) * err_az
+        
+        return err_decl
     
     def calc_decl(self, lat:float, alt:float, az:float) -> float:
         """ Calculates the declination based on altitude and azimuth of an object.
@@ -94,11 +147,12 @@ class Declination:
         if longitude not in range(-180, 180):
             raise ValueError("The longitude should be between -180 and 180.")  
         
-        if (julian_year < 1):
-            eph = load(self.EPHEM_FILES[0])
-        else:
-            eph = load(self.EPHEM_FILES[1])
+        #if (julian_year < 1):
+        #    eph = load(self.EPHEM_FILES[0])
+        #else:
+        #    eph = load(self.EPHEM_FILES[1])
         #eph = load('de421.bsp') # suficiente para 1500–2500 aprox.
+        eph = load('de431t.bsp') # suficiente para 1500–2500 aprox.
         print("DE431 ephemerides file loaded.")
     
         sun = eph['sun']
@@ -497,3 +551,127 @@ class Declination:
                                        peak_prominence=peak_prominence,
                                        xtick_step=xtick_step
                                        )
+    
+    def plot_fmap(self, 
+                  xaxis:list, 
+                  yaxis:list, 
+                  bw:float, 
+                  xgrid1:int, 
+                  xgrid2:int, 
+                  ygrid1:int, 
+                  ygrid2:int, 
+                  grid:int=250, 
+                  xlabel:str='', 
+                  ylabel:str='', 
+                  cmap:str='nipy_spectral', 
+                  norm:bool=True, 
+                  xtext:bool=True, 
+                  ymarkers:bool=True):
+        """
+        Plots a density diagram / frequency map. It can be used to visualize
+        for instance the change in orientation tendency (declinations) (Y axis)
+        over time (X axis).
+        
+        Parameters
+        ----------
+        xaxis : list
+            A list of declination values
+        yaxis : list
+            A list of temporal values
+        bw : float
+            The declination uncertainty. Can be 2*self.err_decl(...)
+        xgrid1 : int
+            The left limit of the plot. Can be the smallest value in `xaxis`.
+            The xgrid[1,2] and ygrid[1,2] can be used to plot parts of the 
+            `xaxis` and `yaxis` data.
+        xgrid2 : int
+            The right limit of the plot. Can be the largest value in `xaxis`
+        ygrid1 : int
+            The lower limit of the plot. Can be the smallest value in `yaxis`
+        ygrid2 : int
+            The upper limit of the plot. Can be the largest value in `yaxis`
+        grid : int
+            Default=250
+        xlabel : str
+            The label for the x axis. Default=''            
+        ylabel : str
+            The label for the y axis. Default=''            
+        cmap : str
+            The color map used to show the plot. Default='nipy_spectral'            
+        norm : bool
+            Variable indicating whether or not the data should be normalized. Default=True            
+        xtext : bool
+            Variable indicating whether or not the text on the X axis should be shown. 
+            Default=True            
+        ymarkers : bool
+            Variable indicating whether or not the markers on the X axis should be shown. 
+            Default=True
+            
+        Returns
+        -------
+        
+        Raises
+        ------
+        ValueError
+            If any argument is None.
+            
+        """
+
+        if xaxis is None or yaxis is None:
+            raise ValueError("`xaxis` and `yaxis` cannot be None.")
+            
+
+        # fit an array of size [Ndim, Nsamples]
+        #fig, ax = plt.subplots(1,1)
+        
+        data = np.vstack([xaxis, yaxis])
+        bw = bw / np.std(data)
+        kde = gaussian_kde(data, bw_method=bw)#'silverman')
+        
+        # evaluate on a regular grid
+        xgrid = np.linspace(xgrid1, xgrid2, grid)
+        ygrid = np.linspace(ygrid1, ygrid2, grid)
+        Xgrid, Ygrid = np.meshgrid(xgrid, ygrid)
+        ZZ = kde.evaluate(np.vstack([Xgrid.ravel(), Ygrid.ravel()]))
+        
+        if norm == True: 
+            ZZ = (ZZ-np.mean(ZZ))/np.std(ZZ)
+    
+        #ax = plt.axes(projection='3d')
+        #ax.plot_surface(np.reshape(xaxis,(1,206)), np.reshape(yaxis,(1,206)), np.reshape(ZZ,(500,500)))
+        
+        fig, ax = plt.subplots(1,1)
+        # Plot the result as an image
+        plt.imshow(ZZ.reshape(Xgrid.shape),
+                   origin='lower', aspect='auto',
+                   extent=[xgrid1, xgrid2, ygrid1, ygrid2],
+                   cmap=cmap)
+        
+        cb = plt.colorbar()
+        if norm == True: 
+            cb.set_label("Normalized relative frequency",fontsize=18)
+        else: 
+            cb.set_label("Frequency",fontsize=18)
+        
+        cb.ax.tick_params(labelsize=16)
+        plt.xlabel(xlabel,fontsize=18 )
+        plt.ylabel(ylabel,fontsize=18)
+        plt.xticks(fontsize=16)
+        ax.yaxis.set_ticks(np.arange(ygrid1, ygrid2, 10))
+        ax.xaxis.set_ticks(np.arange(xgrid1, xgrid2+1, 1))
+        plt.yticks(fontsize=16)
+        fig.set_figwidth(6)
+        fig.set_figheight(1)
+        
+        if ymarkers == True:
+            ee = 23.56 #Ecliptic angle
+            plt.axhline(y=-ee, color='white', ls=':', lw=1.3, alpha=0.7) #WS line
+            plt.axhline(y=0, color='white',lw=1.3, alpha=0.7) #Equinox lines
+            plt.axhline(y=ee, color='white',ls=':', lw=1.3, alpha=0.7) #SS lines
+            
+        if xtext == True:
+            plt.text(x=-8.1,y=-40,s='Leon', color='white', weight = 'bold', fontsize=18)
+            plt.text(x=-5,y=-40,s='Castile', color='white', weight = 'bold', fontsize=18)
+            plt.text(x=-2.5,y=-40,s='Navarre', color='white', weight = 'bold', fontsize=18)
+            plt.text(x=-1,y=-40,s='Aragon', color='white', weight = 'bold', fontsize=18)
+        plt.show()

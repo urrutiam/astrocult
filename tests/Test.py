@@ -8,11 +8,18 @@ Created on Thu Jan  8 10:05:20 2026
 import datetime
 import math
 import pandas as pd
-import sklearn
 import sys
 sys.path.append("C:/Users/USER/Documents/GitHub/astrocult/src/")
 
-from astrocult import Azimuth, Declination, GeoUtils, JulianHelper, Clustering
+from astrocult import Azimuth, Altitude, Declination, GeoUtils, JulianHelper, Clustering
+
+def test_altitude():
+    """Unit tests for the Altitude class"""
+    
+    alt = Altitude.Altitude()
+    
+    print(alt.update_alt_by_atmospheric_refraction(1))
+    print(alt.err_alt(1))
 
 def test_declination():
     """Unit tests for the Declination class"""
@@ -21,6 +28,8 @@ def test_declination():
     
     dec.calculate_declinations_for_entire_year(2000, 45, 23, 100)
     dec.plot_decl_adaptive([1,2,3], 45, [0.1,0.2,0.3])
+    
+    dec.plot_fmap([23,23,0,0], [1,2,3,4], 0.5, 1, 4, 0, 23)
 
 def test_julianhelper():
     """Unit tests for the JulianHelper class"""
@@ -55,6 +64,8 @@ def test_azimuth():
     az = Azimuth.Azimuth()
     az.plot_az_adaptive([1,2,3], 45, [0.1,0.2,0.3])
     
+    print(az.calc_az(10.0, 45.0, -30.0))
+    
 def test_geoutils():
     sunDec = -24.1552
     moonDec = -30.1094
@@ -76,6 +87,10 @@ def test_geoutils():
     
     gu = GeoUtils.GeoUtils()
     dec = Declination.Declination()
+    
+    mg_dec, mg_unc = gu.get_magnetic_declination(45, 25)
+        
+    print(mg_dec)
 
     az1 = gu.get_bearing(vatinLat, target1Lat, vatinLon, target1Lon)
     dec1 = dec.calc_decl(target1Lat, target1Alt, az1)
@@ -158,5 +173,6 @@ if __name__ == "__main__":
     #test_julianhelper()
     #test_declination()
     #test_azimuth()
+    #test_altitude()
     #test_geoutils()
-    test_clustering()
+    #test_clustering()
