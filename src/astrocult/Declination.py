@@ -65,11 +65,11 @@ class Declination:
         if not (0 <= az <= 360):
             raise ValueError("The `az` should be between 0 and 360")    
         
+        decl = self.calc_decl(lat, alt, az)
+        
         az = np.radians(az)
         alt = np.radians(alt)
         lat = np.radians(lat)
-        
-        decl = self.calc_decl(lat, alt, az)
         
         der_alt = (np.sin(lat) * np.cos(alt) - np.cos(lat) * np.cos(az) * np.sin(alt)) / np.sqrt(1 - ((np.sin(np.radians(decl)))**2))
         der_az = -np.cos(lat) * np.sin(az) * np.cos(alt) / np.sqrt(1 - ((np.sin(np.radians(decl)))**2))

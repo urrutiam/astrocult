@@ -5,6 +5,7 @@ from scipy import integrate
 from numpy.random import Generator
 import matplotlib.pyplot as plt
 import math
+import statistics
 
 from multipledispatch import dispatch
 
@@ -39,7 +40,7 @@ class Azimuth:
         if azimuths is None:
             raise ValueError("`azimuths` cannot be None.")
 
-        return math.sqrt(err_az**2 + math.stddev(azimuths)**2)
+        return math.sqrt(err_az**2 + statistics.stdev(azimuths)**2)
     
     @dispatch(float, float, float, bool)
     def calc_az(self, altitude_deg: float, 

@@ -29,6 +29,8 @@ def test_declination():
     dec.calculate_declinations_for_entire_year(2000, 45, 23, 100)
     dec.plot_decl_adaptive([1,2,3], 45, [0.1,0.2,0.3])
     
+    print(dec.err_decl(45,125,0))
+    
     dec.plot_fmap([23,23,0,0], [1,2,3,4], 0.5, 1, 4, 0, 23)
 
 def test_julianhelper():
@@ -65,6 +67,12 @@ def test_azimuth():
     az.plot_az_adaptive([1,2,3], 45, [0.1,0.2,0.3])
     
     print(az.calc_az(10.0, 45.0, -30.0))
+    
+    print(az.err_az([124.5, 125, 125.5, 124]))
+    
+    gu = GeoUtils.GeoUtils()
+    
+    mg_dec, mg_unc = gu.get_magnetic_declination(45, 25, 2025)
     
 def test_geoutils():
     sunDec = -24.1552

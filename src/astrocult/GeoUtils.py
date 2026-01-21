@@ -27,7 +27,10 @@ class GeoUtils:
   
   def get_magnetic_declination(self, 
                            lat: float,
-                           lon: float) -> tuple[float, float]:
+                           lon: float,
+                           year: int=2026,
+                           month: int=1,
+                           day: int=1) -> tuple[float, float]:
       """      
       Uses the NOAA services to automatically retrieve the magnetic declination
       for a given location. It uses the WMM model (2024-2029). The service has 
@@ -37,10 +40,16 @@ class GeoUtils:
       computing the astronomical declination.
       
       Parameters   
-      lat:float
+      lat : float
           The latitude of the location
-      lon:float
+      lon : float
           The longitude of the location
+      year : int
+          The year for which the magnetic declination will be retrieved
+      month : int
+          The month for which the magnetic declination will be retrieved
+      day : int
+          The day for which the magnetic declination will be retrieved
           
       Returns
       tuple 
@@ -57,11 +66,19 @@ class GeoUtils:
           raise ValueError("The latitude should be between -90 and 90.")   
       if not (-180 <= lon <= 180):
           raise ValueError("The longitude should be between -180 and 180.") 
-      
-      url = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?lat1=" + str(lat) + "&lon1=" + str(lon) + "&key=zNEw7&resultFormat=csv" 
+      if not (2024 <= year <= 2029):
+          raise ValueError("The year should be between 2024 and 2029.")
+      if not (1 <= month <= 12):
+          raise ValueError("The month should be between 1 and 12")
+      if not (1 <= day <= 31):
+          raise ValueError("The day should be between 1 and 31")
+              
+      url = "https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination?startYear=" + str(year) + "&startMonth=" + str(month) + "&startDay=" + str(day) + "&lat1=" + str(lat) + "&lon1=" + str(lon) + "&key=zNEw7&resultFormat=csv" 
       
       f = urlopen(url)
       response = f.read().decode('utf-8')
+      
+      print(response)
       
       data_line = response.strip().split("\n")[-1]
                  
