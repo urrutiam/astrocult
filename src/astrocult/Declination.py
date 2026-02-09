@@ -18,13 +18,15 @@ from skyfield.api import load, wgs84
 import JulianHelper as JulianHelper
 import HelperFunctions as HelperFunctions
 
+import subprocess
+
 class Declination:
     """ Class containing declination related utility functions.
     
     Requirements: skyfield, pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """
     
-    EPHEM_FILES = ['D:/Users/murru/Documents/TRABAJO/Programas/arqueoastro/de431_part-1.bsp', 'D:/Users/murru/Documents/TRABAJO/Programas/arqueoastro/de431_part-2.bsp']
+    EPHEM_FILES = ['de431_part-1.bsp', 'de431_part-2.bsp']
     
     def err_decl(self, 
                  lat:float, 
@@ -148,11 +150,11 @@ class Declination:
         if longitude not in range(-180, 180):
             raise ValueError("The longitude should be between -180 and 180.")  
         
-        if (julian_year < 1):
-            eph = load(self.EPHEM_FILES[0])
-        else:
-            eph = load(self.EPHEM_FILES[1])
-        #eph = load('de421.bsp') # suficiente para 1500–2500 aprox.
+        #if (julian_year < 1):
+        #    eph = load(self.EPHEM_FILES[0])
+        #else:
+        #    eph = load(self.EPHEM_FILES[1])
+        eph = load('de421.bsp') # suficiente para 1500–2500 aprox.
         #eph = load('de431t.bsp') # suficiente para 1500–2500 aprox.
         print("DE431 ephemerides file loaded.")
     
