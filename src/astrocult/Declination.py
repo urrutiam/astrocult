@@ -5,6 +5,7 @@ import numpy as np
 from numpy.random import Generator
 
 from scipy import integrate
+from scipy import stats
 from scipy.stats import gaussian_kde
 import datetime
 from  datetime import timedelta
@@ -23,7 +24,7 @@ class Declination:
     Requirements: skyfield, pandas, numpy (conda-forge), matlibplot, scipy, typing.
     """
     
-    #EPHEM_FILES = ['de431_part-1.bsp', 'de431_part-2.bsp']
+    EPHEM_FILES = ['D:/Users/murru/Documents/TRABAJO/Programas/arqueoastro/de431_part-1.bsp', 'D:/Users/murru/Documents/TRABAJO/Programas/arqueoastro/de431_part-2.bsp']
     
     def err_decl(self, 
                  lat:float, 
@@ -147,12 +148,12 @@ class Declination:
         if longitude not in range(-180, 180):
             raise ValueError("The longitude should be between -180 and 180.")  
         
-        #if (julian_year < 1):
-        #    eph = load(self.EPHEM_FILES[0])
-        #else:
-        #    eph = load(self.EPHEM_FILES[1])
+        if (julian_year < 1):
+            eph = load(self.EPHEM_FILES[0])
+        else:
+            eph = load(self.EPHEM_FILES[1])
         #eph = load('de421.bsp') # suficiente para 1500–2500 aprox.
-        eph = load('de431t.bsp') # suficiente para 1500–2500 aprox.
+        #eph = load('de431t.bsp') # suficiente para 1500–2500 aprox.
         print("DE431 ephemerides file loaded.")
     
         sun = eph['sun']
@@ -565,7 +566,6 @@ class Declination:
                   ylabel:str='', 
                   cmap:str='nipy_spectral', 
                   norm:bool=True, 
-                  xtext:bool=True, 
                   ymarkers:bool=True):
         """
         Plots a density diagram / frequency map. It can be used to visualize
@@ -575,9 +575,9 @@ class Declination:
         Parameters
         ----------
         xaxis : list
-            A list of declination values
-        yaxis : list
             A list of temporal values
+        yaxis : list
+            A list of declination values
         bw : float
             The declination uncertainty. Can be 2*self.err_decl(...)
         xgrid1 : int
@@ -599,10 +599,7 @@ class Declination:
         cmap : str
             The color map used to show the plot. Default='nipy_spectral'            
         norm : bool
-            Variable indicating whether or not the data should be normalized. Default=True            
-        xtext : bool
-            Variable indicating whether or not the text on the X axis should be shown. 
-            Default=True            
+            Variable indicating whether or not the data should be normalized. Default=True                     
         ymarkers : bool
             Variable indicating whether or not the markers on the X axis should be shown. 
             Default=True
@@ -633,7 +630,6 @@ class Declination:
         ygrid = np.linspace(ygrid1, ygrid2, grid)
         Xgrid, Ygrid = np.meshgrid(xgrid, ygrid)
         ZZ = kde.evaluate(np.vstack([Xgrid.ravel(), Ygrid.ravel()]))
-        
         if norm == True: 
             ZZ = (ZZ-np.mean(ZZ))/np.std(ZZ)
     
@@ -669,9 +665,4 @@ class Declination:
             plt.axhline(y=0, color='white',lw=1.3, alpha=0.7) #Equinox lines
             plt.axhline(y=ee, color='white',ls=':', lw=1.3, alpha=0.7) #SS lines
             
-        if xtext == True:
-            plt.text(x=-8.1,y=-40,s='Leon', color='white', weight = 'bold', fontsize=18)
-            plt.text(x=-5,y=-40,s='Castile', color='white', weight = 'bold', fontsize=18)
-            plt.text(x=-2.5,y=-40,s='Navarre', color='white', weight = 'bold', fontsize=18)
-            plt.text(x=-1,y=-40,s='Aragon', color='white', weight = 'bold', fontsize=18)
         plt.show()

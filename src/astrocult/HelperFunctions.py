@@ -640,7 +640,7 @@ def plot_curvigram(
             If mandatory arguments are None, or values are out of range.
     """
     
-    if data == None or binwidths == None:
+    if data is None or binwidths is  None:
         raise ValueError("`azimuths`, `latitude` and `binwidths` cannot be None.")
         
     if (latitude != None) and not (-90 <= latitude <= 90):
