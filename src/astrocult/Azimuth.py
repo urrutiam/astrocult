@@ -469,7 +469,7 @@ class Azimuth:
                 If mandatory arguments are None, or values are out of range.
         """
         
-        if None in [azimuths, binwidths, latitude]:
+        if None is azimuths or None is binwidths or None is latitude:
             raise ValueError("`azimuths`, `latitude` and `binwidths` cannot be None.")
             
         if not (-90 <= latitude <= 90):
