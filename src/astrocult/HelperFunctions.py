@@ -503,7 +503,7 @@ def find_linear_peaks(
                 proms = peak_prominences(y, idx)[0]
             for i, h, p in zip(idx, heights, proms):
                 peaks_out.append({"angle": float(x[i]), "height": float(h), "prominence": float(p), "index": int(i)})
-            peaks_out.sort(key=lambda d: d["value"])
+            peaks_out.sort(key=lambda d: d["angle"])
             return peaks_out
         except Exception:
             use_scipy = False
@@ -523,8 +523,8 @@ def find_linear_peaks(
             taken[i] = True
         cand_idx = np.array(sorted(chosen), dtype=int)
     for i in cand_idx:
-        peaks_out.append({"value": float(x[i]), "height": float(y[i]), "prominence": None, "index": int(i)})
-    peaks_out.sort(key=lambda d: d["value"])
+        peaks_out.append({"angle": float(x[i]), "height": float(y[i]), "prominence": None, "index": int(i)})
+    peaks_out.sort(key=lambda d: d["angle"])
     
     return peaks_out
 
@@ -760,11 +760,17 @@ def plot_curvigram(
     peaks_all = []
     peaks_sig = []
     if mark_significant_peaks:
-        peaks_all = find_circular_peaks(
-            x_deg=x, y=y, min_separation_deg=min_peak_separation_deg, prominence=peak_prominence
-        )
+        if curvigram_fn.__name__ == "curvigram_az_adaptive":
+            peaks_all = find_circular_peaks(
+                x_deg=x, y=y, min_separation_deg=min_peak_separation_deg, prominence=peak_prominence
+            )
+        else:
+            peaks_all = find_linear_peaks(
+                x_deg=x, y=y, min_separation_deg=min_peak_separation_deg, prominence=peak_prominence
+            )           
         thr_used = thr_global if (draw_thresholds and thr_global is not None) else three_sigma_level
         peaks_sig = [p for p in peaks_all if p["height"] >= thr_used]
+        
         for p in peaks_sig:
             ax.plot(p["angle"], p["height"], marker="o", ms=5, color="black")
             ax.annotate(f"{p['angle']:.1f}°",
