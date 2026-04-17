@@ -568,7 +568,8 @@ class Declination:
                   ylabel:str='', 
                   cmap:str='nipy_spectral', 
                   norm:bool=True, 
-                  ymarkers:bool=True):
+                  ymarkers:bool=True,
+                  show:bool=True) -> plt.Figure:
         """
         Plots a density diagram / frequency map. It can be used to visualize
         for instance the change in orientation tendency (declinations) (Y axis)
@@ -605,10 +606,13 @@ class Declination:
         ymarkers : bool
             Variable indicating whether or not the markers on the X axis should be shown. 
             Default=True
+        show : bool
+            Default: True
             
         Returns
         -------
-        
+            plt.Figure
+            
         Raises
         ------
         ValueError
@@ -667,4 +671,7 @@ class Declination:
             plt.axhline(y=0, color='white',lw=1.3, alpha=0.7) #Equinox lines
             plt.axhline(y=ee, color='white',ls=':', lw=1.3, alpha=0.7) #SS lines
             
-        plt.show()
+        if show:
+            plt.show()
+            
+        return fig
