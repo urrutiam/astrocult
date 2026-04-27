@@ -7,6 +7,11 @@ from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram
+
+import math
+
+from circular_clustering.circular_k_means_weighted import CircularWeightedKMeans
+
 import seaborn as sns
 
 class Clustering:
@@ -117,6 +122,30 @@ class Clustering:
         sns.set(font_scale=0.7)
         sns.heatmap(components, annot=True)
         plt.show()
+        
+    def __circular_distance(self, angle1, angle2):
+        '''
+        Calculate the circular distance in radians between two angles. It is used for the circular KMeans algorithm instead of the classic Euclidian distance.
+        
+        Parameters
+        ----------
+        angle1 : float
+            The angle in radians
+        angle2 : float
+            The angle in radians
+            
+        Returns
+        -------
+        pd.DataFrame
+            The circular distance in radians between the angles using the arctan2 function
+            
+        Raises
+        ------
+
+        '''
+
+        diff = angle1 - angle2
+        return np.abs(np.arctan2(np.sin(diff), np.cos(diff)))
     
     def __normalize_data(self, 
                        df: pd.DataFrame) -> pd.DataFrame:
@@ -197,6 +226,7 @@ class Clustering:
                                 n_clusters: int=10) -> tuple[KMeans, pd.DataFrame]:
         '''
         Groups the dataframe points into clusters based on the KMeans algorithm.
+        Should be used for non circular data. For circular data use 'create_circular_kmeans_clusters' instead.
         Data is normalized using `self.__normalize_data`.
         
         Parameters
@@ -209,10 +239,10 @@ class Clustering:
         Returns
         -------
         Tuple
-            sklearn.cluster.AgglomerativeClustering
+            sklearn.cluster.KMeans
                 Model
             pd.Dataframe
-                The dataframe with the appended column representing the clusters
+                The dataframe with the appended column 'kmeans-clusters' representing the clusters
             
         Raises
         ------
@@ -234,7 +264,68 @@ class Clustering:
           
         return model, df2
 
-    
+    def create_circular_kmeans_clusters(self, 
+                                df: pd.DataFrame, 
+                                circulardata_column,
+                                n_clusters: int=10) -> tuple[CircularWeightedKMeans, pd.DataFrame]:
+        '''
+        Groups the dataframe points into clusters based on the circular KMeans algorithm.
+        Use it instead of 'create_kmeans_clusters' when circular data such as azimuths needs to be clustered as the traditional KMeans does not know that 0 is 360 and can group in distinct clusters objects around these value.
+        Data is not normalized.
+        
+        Parameters
+        ----------
+        df : pd.Dataframe
+            The dataframe containing features as columms
+        ciculardata_column : string
+            The column containing circular data in degrees, e.g., azimuths
+        max_clusters : int
+            The maximum number of clusters generated. Default: 10 
+
+            
+        Returns
+        -------
+        Tuple
+            circular_clustering.circular_k_means_weighted.CircularWeightedKMeans
+                Model
+            pd.Dataframe
+                The dataframe with the appended column 'ckmeans-clusters' representing the clusters
+            
+        Raises
+        ------
+        ValueError
+            If the dataframe is None
+        '''    
+        
+        if df is None:
+            raise ValueError("The dataframe cannot be None.")
+        
+        df2 = df.copy()
+        
+        # convert degrees to to [-pi, pi] interval
+        df2[circulardata_column] = df2[circulardata_column].apply(lambda x: math.remainder(math.radians(x), 2 * math.pi))
+                
+        circXmeans = CircularWeightedKMeans(n_clusters)
+        circXmeans.fit(df2[circulardata_column])
+
+        # Get centroids
+        centroids = circXmeans.centroids
+
+      
+        # Initialize a list to store cluster labels
+        cluster_labels = []
+        
+        # Iterate over each data point to assign it to the closest centroid
+        for az_value in df2[circulardata_column]:
+            distances = [self.__circular_distance(az_value, c) for c in centroids]
+            closest_centroid_index = np.argmin(distances)
+            cluster_labels.append(closest_centroid_index)
+        
+        df3 = df.copy()
+        df3['ckmeans-clusters'] = cluster_labels
+        
+        return circXmeans, df3
+        
     def create_hierachical_clusters(self, 
                                     df: pd.DataFrame, 
                                     n_clusters: int=None, 
@@ -331,7 +422,9 @@ class Clustering:
             cluster_col = "hierarchical-clusters"  
         if type(model) == KMeans: 
             cluster_col = "kmeans-clusters"  
-        
+        if type(model) == CircularWeightedKMeans: 
+            cluster_col = "ckmeans-clusters"  
+            
         plt.scatter(df[axis_cols[0]], df[axis_cols[1]], c=df[cluster_col], cmap='rainbow')
         plt.legend(loc="best")
         plt.xlabel(axis_cols[0])

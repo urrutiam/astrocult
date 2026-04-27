@@ -152,6 +152,8 @@ def test_clustering():
     data = {'Lat':[45.1, 44.9, 45.2, 44.8],
             'Lon':[23.2, 23.3, 23.1, 23.3],
         'Declination': [20, -21, 19, -18]}
+    
+    data_az = {'Azimuth': [350, 355, 10, 5, 175, 185]}
 
     df = pd.DataFrame(data)
          
@@ -177,10 +179,65 @@ def test_clustering():
     
     clustering.show_dendrogram(hierarchical_model)
     
+    df2 = pd.DataFrame(data_az)
+    
+    ckmeans_model, df_ckmeans = clustering.create_circular_kmeans_clusters(df2, 'Azimuth', 2)
+    
+    print(df_ckmeans)
+    
+    kmeans_model2, df_kmeans2 = clustering.create_kmeans_clusters(df2, 2)
+    
+    print(df_kmeans2)
+    
+def test_hartashen():
+    
+    alt = Altitude.Altitude()
+    dec = Declination.Declination()
+    
+    az_avg = [328.9, 147.9, 38.8, 221.7]
+    az_err = [1.3, 1.3, 0.8, 0.8] # NW, SE, NE, SW 
+    avg_h = [2.8, 3, 7.5, -0.75]
+    h_err = []
+    
+    for h in avg_h:
+        h_err.append(alt.err_alt(h, err_alt=0.25))
+        
+    print(h_err)
+        
+    dec_err = []
+    
+    for i in range(0,4):
+        dec_err.append(dec.err_decl(41.012, az_avg[i], avg_h[i], az_err[i], h_err[i]))
+        
+    print(dec_err)
+    
+def test_ashotsk()  :
+    
+   alt = Altitude.Altitude()
+   dec = Declination.Declination()
+   
+   az_avg = [64.6, 245.4, 130.6, 312.3]
+   az_err = [0.6, 0.6, 0.7, 0.7] # NW, SE, NE, SW 
+   avg_h = [4.8, 7, 1.5, 10]
+   h_err = []
+   
+   for h in avg_h:
+       h_err.append(alt.err_alt(h, err_alt=0.25))
+       
+   print(h_err)
+       
+   dec_err = []
+   
+   for i in range(0,4):
+       dec_err.append(dec.err_decl(41.012, az_avg[i], avg_h[i], az_err[i], h_err[i]))
+       
+   print(dec_err)    
 if __name__ == "__main__":
     #test_julianhelper()
     #test_declination()
     #test_azimuth()
     #test_altitude()
     #test_geoutils()
-    #test_clustering()
+    test_clustering()
+    #test_hartashen()
+    #test_ashotsk()
