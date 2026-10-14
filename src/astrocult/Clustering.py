@@ -17,6 +17,17 @@ import seaborn as sns
 class Clustering:
     '''
     Class containing methods for grouping sites together based on their associated data.
+
+    - `create_kmeans_clusters`, `create_hierachical_clusters`, `create_PCA`
+      scale every column to [0, 1] first (min-max), so each column counts
+      equally; only pass columns that carry real structure, or check them
+      with `create_PCA` first.
+    - `get_optimal_number_of_kmeans_clusters` picks k (>= 2) with the
+      silhouette score, computed on the same scaled data.
+    - `create_circular_kmeans_clusters` clusters circular data such as
+      azimuths, where 0° and 360° are the same direction.
+    - `show_clusters`, `show_dendrogram`, `show_PCA_correlation_matrix`
+      plot the results.
     '''
     
     def __create_bins(self,
@@ -185,15 +196,18 @@ class Clustering:
                                     df: pd.DataFrame, 
                                     max_clusters: int=10) -> int:
         '''
-        Calculates the optimal number of clusters by using the Silouette score.
+        Calculates the optimal number of clusters by using the Silhouette score.
+        KMeans is fitted and scored on the same normalized data
+        (see `self.__normalize_data`), for k = 2 ... `max_clusters`.
+        The silhouette score is undefined for k = 1, so the result is always >= 2.
         
         Parameters
         ----------
         df : pd.Dataframe
-            The dataframe containing features as columms
+            The dataframe containing features as columns
         max_clusters : int
-            The maximum number of clusters for which the score is 
-            computed. Default: 10 
+            The largest number of clusters tested (inclusive). It is capped at
+            the number of samples - 1. Default: 10 
             
         Returns
         -------
@@ -203,23 +217,26 @@ class Clustering:
         Raises
         ------
         ValueError
-            If the dataframe is None
+            If the dataframe is None, has fewer than 3 rows, or
+            `max_clusters` is smaller than 2
         '''
         
         if df is None:
             raise ValueError("The dataframe cannot be None.")
+        if len(df) < 3:
+            raise ValueError("At least 3 samples are needed to compute silhouette scores.")
+        if max_clusters < 2:
+            raise ValueError("`max_clusters` must be at least 2.")
 
-        sil_scores = list()
-        
         df_norm = self.__normalize_data(df)
-                
-        for n_clusters in range(2, max_clusters):
-          kmeans = KMeans(n_clusters=n_clusters, random_state=10)
-          kmeans.fit(df_norm)
-          
-          sil_scores.append(silhouette_score(df, kmeans.labels_))
+        k_values = range(2, min(max_clusters, len(df) - 1) + 1)
+
+        sil_scores = []
+        for k in k_values:
+            labels = KMeans(n_clusters=k, random_state=10, n_init=10).fit_predict(df_norm)
+            sil_scores.append(silhouette_score(df_norm, labels))
         
-        return sil_scores.index(max(sil_scores))
+        return int(k_values[int(np.argmax(sil_scores))])
     
     def create_kmeans_clusters(self, 
                                 df: pd.DataFrame, 
@@ -232,9 +249,9 @@ class Clustering:
         Parameters
         ----------
         df : pd.Dataframe
-            The dataframe containing features as columms
-        max_clusters : int
-            The maximum number of clusters generated. Default: 10 
+            The dataframe containing features as columns
+        n_clusters : int
+            The number of clusters to create. Default: 10 
             
         Returns
         -------
@@ -271,16 +288,19 @@ class Clustering:
         '''
         Groups the dataframe points into clusters based on the circular KMeans algorithm.
         Use it instead of 'create_kmeans_clusters' when circular data such as azimuths needs to be clustered as the traditional KMeans does not know that 0 is 360 and can group in distinct clusters objects around these value.
+        The angles are converted to radians in [-pi, pi] and each point is
+        assigned to the centroid with the smallest circular distance
+        |atan2(sin(a - c), cos(a - c))|, i.e. the shortest way around the circle.
         Data is not normalized.
         
         Parameters
         ----------
         df : pd.Dataframe
-            The dataframe containing features as columms
-        ciculardata_column : string
+            The dataframe containing features as columns
+        circulardata_column : string
             The column containing circular data in degrees, e.g., azimuths
-        max_clusters : int
-            The maximum number of clusters generated. Default: 10 
+        n_clusters : int
+            The number of clusters to create. Default: 10 
 
             
         Returns
@@ -333,20 +353,23 @@ class Clustering:
                                     plot_clusters: bool=True,
                                     metric: str="manhattan",
                                     linkage: str="complete",
-                                    compute_distances: bool=True) -> AgglomerativeClustering:
+                                    compute_distances: bool=True) -> tuple[AgglomerativeClustering, pd.DataFrame]:
         '''
         Groups the dataframe points into clusters using an Agglomerative clustering method.
-        For now it uses `linkage=complete`. Data is normalized using `self.__normalize_data`.
+        Data is normalized using `self.__normalize_data`.
         Parameters
         ----------
         df : pd.Dataframe
-            The dataframe containing features as columms
+            The dataframe containing features as columns
         n_clusters : int
             The number of clusters to find. It must be None if distance_threshold is not None.
         distance_threshold : float
             The linkage distance threshold at or above which clusters will not 
             be merged. If not None, n_clusters must be None
             Setting `distance_threshold=0` ensures we compute the full tree
+        plot_clusters : bool
+            Not used; kept for compatibility. Use `self.show_clusters` or
+            `self.show_dendrogram` to plot the result. Default: True
         metric : str
             The metric used to compute the distance. Default: manhattan. For 
             possible values see `sklearn.cluster.AgglomerativeClustering`
@@ -388,7 +411,7 @@ class Clustering:
     def show_clusters(self,
                       df: pd.DataFrame, 
                       axis_cols: list,
-                      model: AgglomerativeClustering|KMeans):        
+                      model: AgglomerativeClustering|KMeans|CircularWeightedKMeans):        
         '''
         Displays a 2D plot of the clusters using the `axis_cols` as columns.
         
@@ -397,11 +420,15 @@ class Clustering:
         df : pd.DataFrame
             The dataframe containing the columns to be plotted
         axis_cols : list
-            The 2 element list containig the columns representing the axes
-        model : `sklearn.cluster.AgglomerativeClustering` or `sklearn.cluster.KMeans`
+            The 2 element list containing the columns representing the axes
+        model : `sklearn.cluster.AgglomerativeClustering`, `sklearn.cluster.KMeans`
+            or `CircularWeightedKMeans`. `df` must be the dataframe returned
+            together with `model` by the matching `create_*_clusters` method.
 
         Returns
         -------
+        tuple
+            The matplotlib (Figure, Axes)
         
         Raises
         ------
@@ -411,25 +438,30 @@ class Clustering:
          
         if df is None or axis_cols is None or model is None:
             raise ValueError("Parameters cannot be None.")
-        if type(model) == AgglomerativeClustering and type(model) == KMeans:
-            raise ValueError("model can only be AgglomerativeClustering or Kmeans.")
-        
-        if (len(axis_cols) != 2):
-          raise Exception("`axis_cols` must be 2.")
-        
-        cluster_col = None
-        if type(model) == AgglomerativeClustering: 
-            cluster_col = "hierarchical-clusters"  
-        if type(model) == KMeans: 
-            cluster_col = "kmeans-clusters"  
-        if type(model) == CircularWeightedKMeans: 
-            cluster_col = "ckmeans-clusters"  
-            
-        plt.scatter(df[axis_cols[0]], df[axis_cols[1]], c=df[cluster_col], cmap='rainbow')
-        plt.legend(loc="best")
-        plt.xlabel(axis_cols[0])
-        plt.ylabel(axis_cols[1])
+        if len(axis_cols) != 2:
+            raise ValueError("`axis_cols` must contain exactly 2 column names.")
+
+        if isinstance(model, AgglomerativeClustering):
+            cluster_col = "hierarchical-clusters"
+        elif isinstance(model, KMeans):
+            cluster_col = "kmeans-clusters"
+        elif isinstance(model, CircularWeightedKMeans):
+            cluster_col = "ckmeans-clusters"
+        else:
+            raise ValueError("`model` must be an AgglomerativeClustering, KMeans or "
+                             "CircularWeightedKMeans model.")
+        if cluster_col not in df.columns:
+            raise ValueError(f"`df` has no '{cluster_col}' column. Pass the dataframe "
+                             "returned together with `model` by the create_*_clusters method.")
+
+        fig, ax = plt.subplots()
+        sc = ax.scatter(df[axis_cols[0]], df[axis_cols[1]], c=df[cluster_col], cmap='rainbow')
+        ax.legend(*sc.legend_elements(), title="Cluster", loc="best")
+        ax.set_xlabel(axis_cols[0])
+        ax.set_ylabel(axis_cols[1])
         plt.show()
+
+        return fig, ax
             
         
     def show_dendrogram(self, 
@@ -442,6 +474,10 @@ class Clustering:
         Parameters
         ----------
         model : sklearn.cluster.AgglomerativeClustering
+            Built with `compute_distances=True`
+        **kwargs
+            Passed to `scipy.cluster.hierarchy.dendrogram` (e.g. `truncate_mode`,
+            `p`, `labels`)
         
         Returns
         -------
