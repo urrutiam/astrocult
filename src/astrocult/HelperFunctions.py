@@ -4,6 +4,8 @@
 - Angles: `ang_diff_deg`, the shortest signed angular difference.
 - Kernels: `gaussian_bw_to_epanechnikov_h` converts user binwidths
   (bw = 2*sigma) into Epanechnikov half-widths with the same variance.
+- P-values: `monte_carlo_p_values` and `format_p_value`; peaks (and,
+  optionally, deficits) are tested against the extremes of random curves.
 - Null model: `distribution_generic_adaptive` renormalizes a curvigram
   against random datasets, and `estimate_null_max_threshold_adaptive`
   gives the percentile threshold used to call peaks significant. Both draw
@@ -513,6 +515,7 @@ def estimate_null_max_threshold_adaptive(
     rng: Generator | None = None,
     null_sampler: Callable[[int, Generator], np.ndarray] | None = None,
     renormalization: str = "auto",
+    return_minima: bool = False,
 ):
     """Estimates the significance threshold for peaks of renormalized curves.
 
@@ -558,6 +561,9 @@ def estimate_null_max_threshold_adaptive(
         case-insensitive, None also means 'none'. Default: "pdf"
     rng : Generator | None
         Random generator; pass one for reproducible results. Default: None
+    return_minima : bool
+        Also return the minima of the renormalized null curves (pass 2) as
+        a 4th value. Default: False
     null_sampler : Callable[[int, Generator], np.ndarray] | None
         Function returning one random dataset of the given size, used as the
         null model. None draws uniformly over [loc, loc + scale]. See
@@ -587,6 +593,9 @@ def estimate_null_max_threshold_adaptive(
             The null-model scale used for renormalization (pass 1): mean
             standard deviation of the null densities ('mean'), or typical
             point-wise standard deviation ('expected')
+        minima : np.ndarray, shape (iterations,)
+            Only with `return_minima=True`: minimum of each renormalized
+            null curve, for the deficit test
 
     Raises
     ------
@@ -644,8 +653,9 @@ def estimate_null_max_threshold_adaptive(
         mean_null_std = float(np.sqrt(curves1.var(axis=0).mean()))
     denom = mean_null_std if mean_null_std > np.finfo(float).eps else 1.0
 
-    # Pass 2: maxima of renormalized null curves
+    # Pass 2: maxima (and minima) of renormalized null curves
     maxima = np.empty(iterations, dtype=float)
+    minima = np.empty(iterations, dtype=float)
     for i in range(iterations):
         null_sample = (np.asarray(null_sampler(n_samples, rng), dtype=float) if null_sampler is not None
                        else rng.choice(uniform_grid, size=n_samples, replace=False))
@@ -669,8 +679,11 @@ def estimate_null_max_threshold_adaptive(
             )
         z = ((dens - null_expectation) if mode == "expected" else (dens - np.mean(dens))) / denom
         maxima[i] = float(np.max(z))
+        minima[i] = float(np.min(z))
 
     threshold = float(np.percentile(maxima, percentile))
+    if return_minima:
+        return threshold, maxima, mean_null_std, minima
     return threshold, maxima, mean_null_std
 
 def find_circular_peaks(
@@ -876,6 +889,77 @@ def find_linear_peaks(
     return peaks_out
 
 
+DEFICIT_COLOR = "#d1495b"
+
+
+def monte_carlo_p_values(values, null_extremes, side: str = "greater") -> np.ndarray:
+    """Monte Carlo p-values of observed curve values against the extremes
+    of random (null-model) curves.
+
+    For side='greater', `null_extremes` are the highest points of the
+    random curves and p = (1 + k) / (1 + N), where k of the N random curves
+    reach at least the observed value anywhere on the curve. For
+    side='less', `null_extremes` are their lowest points and k counts the
+    random curves that dip at least as low. Because each random curve
+    contributes its extreme over the whole axis, the p-value already
+    accounts for looking at every position (a family-wise p-value). The
+    (1 + k) / (1 + N) form is the standard Monte Carlo estimate; it never
+    returns 0, and its smallest possible value is 1 / (1 + N).
+
+    Parameters
+    ----------
+    values : float | array-like
+        Observed peak heights (side='greater') or dip depths (side='less')
+        in the units of the renormalized curve
+    null_extremes : array-like
+        Maxima (side='greater') or minima (side='less') of the random curves
+    side : str
+        'greater' or 'less'. Default: 'greater'
+
+    Returns
+    -------
+    np.ndarray
+        One p-value per value
+
+    Raises
+    ------
+    ValueError
+        If `null_extremes` is empty or `side` is unknown
+    """
+    v = np.atleast_1d(np.asarray(values, dtype=float))
+    null = np.asarray(null_extremes, dtype=float).ravel()
+    if null.size == 0:
+        raise ValueError("`null_extremes` must not be empty.")
+    if side == "greater":
+        k = (null[None, :] >= v[:, None]).sum(axis=1)
+    elif side == "less":
+        k = (null[None, :] <= v[:, None]).sum(axis=1)
+    else:
+        raise ValueError("`side` must be 'greater' or 'less'.")
+    return (1.0 + k) / (1.0 + null.size)
+
+
+def format_p_value(p: float, n_null: int) -> str:
+    """Formats a Monte Carlo p-value for plot labels: 'p = 0.012', or
+    'p ≤ 0.001' when no random curve reached the observed value (the
+    smallest p-value `n_null` random curves can resolve)."""
+    floor = 1.0 / (1.0 + n_null)
+    if np.isclose(p, floor):
+        return f"p ≤ {floor:.2g}"
+    return f"p = {p:.2g}"
+
+
+def _find_deficits(x, y, is_az: bool, min_separation_deg: float, prominence) -> list:
+    """Local minima (dips) of a curvigram, as dicts like the peaks
+    ('angle', 'height' = curve value at the dip, 'prominence', 'index')."""
+    finder = find_circular_peaks if is_az else find_linear_peaks
+    dips = finder(x_deg=x, y=-np.asarray(y, dtype=float), min_separation_deg=min_separation_deg,
+                  prominence=prominence)
+    for d in dips:
+        d["height"] = -d["height"]
+    return dips
+
+
 def _draw_curvigram_polar(
     theta_deg: np.ndarray,
     y: np.ndarray,
@@ -894,6 +978,10 @@ def _draw_curvigram_polar(
     null_band: tuple[np.ndarray, np.ndarray] | None = None,
     show_three_sigma: bool = False,
     lunar_lines: dict | None = None,
+    peak_texts: list | None = None,
+    deficits_sig: list | None = None,
+    deficit_texts: list | None = None,
+    deficit_mask: np.ndarray | None = None,
 ) -> tuple[plt.Figure, plt.Axes, bool]:
     """Draws an azimuth curvigram on a polar (compass) axes. Used by
     `plot_curvigram(..., polar=True)`; see its `polar` parameter.
@@ -933,9 +1021,12 @@ def _draw_curvigram_polar(
     y_max = float(np.nanmax(y)) if y.size else 1.0
     span = max(y_max - y_min, 1.0)
     has_line_labels = draw_reference_lines and bool(_azimuth_line_labels(ref_lines, lunar_lines, ref_color))
-    # room for peak labels, plus a band near the rim for the line labels
-    r_lo, r_hi = y_min - 0.05 * span, y_max + (0.42 if has_line_labels else 0.32) * span
-    ax.set_rorigin(y_min - 0.35 * span)                      # open centre
+    two_line = bool(peak_texts) and any("\n" in t for t in peak_texts)
+    # room for peak labels, plus a band near the rim for the line labels,
+    # and room inside for deficit labels
+    r_lo = y_min - (0.25 if deficits_sig else 0.05) * span
+    r_hi = y_max + ((0.42 if has_line_labels else 0.32) + (0.25 if two_line else 0.0)) * span
+    ax.set_rorigin(r_lo - 0.30 * span)                       # open centre
     ax.set_ylim(r_lo, r_hi)
 
     if null_band is not None:
@@ -950,6 +1041,11 @@ def _draw_curvigram_polar(
         sig = np.append(np.asarray(significant, dtype=bool), bool(significant[0]))
         ax.fill_between(th, 0, yy, where=sig, alpha=min(1.0, fill_alpha * 2),
                         facecolor=fill_color, edgecolor="none", zorder=2.1, label="Significant")
+    if deficit_mask is not None and np.any(deficit_mask):
+        dm = np.append(np.asarray(deficit_mask, dtype=bool), bool(deficit_mask[0]))
+        ax.fill_between(th, 0, yy, where=dm, alpha=min(1.0, fill_alpha * 2),
+                        facecolor=DEFICIT_COLOR, edgecolor="none", zorder=2.1,
+                        label="Significant deficit")
     ax.plot(th, yy, color=line_color, lw=1.6, zorder=3, label=label if label else None)
 
     if show_three_sigma:
@@ -981,13 +1077,22 @@ def _draw_curvigram_polar(
                     ha="center", va="center", fontsize=8, color=col, zorder=4.5,
                     bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.85))
 
-    for p in peaks_sig:
+    texts = peak_texts if peak_texts is not None else [f"{p['angle']:.1f}°" for p in peaks_sig]
+    for p, txt in zip(peaks_sig, texts):
         t = np.radians(p["angle"])
         ax.plot(t, p["height"], marker="o", ms=5.5, mfc="white", mec=line_color, mew=1.6, zorder=4)
-        ax.annotate(f"{p['angle']:.1f}°", xy=(t, p["height"]),
-                    xytext=(t, p["height"] + 0.11 * span), textcoords="data",
+        ax.annotate(txt, xy=(t, p["height"]),
+                    xytext=(t, p["height"] + (0.15 if "\n" in txt else 0.11) * span), textcoords="data",
                     ha="center", va="center", fontsize=10, color=text_color, zorder=5,
                     bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.8", lw=0.6, alpha=0.9))
+    dtexts = deficit_texts if deficit_texts is not None else [f"{d['angle']:.1f}°" for d in (deficits_sig or [])]
+    for d, txt in zip(deficits_sig or [], dtexts):
+        t = np.radians(d["angle"])
+        ax.plot(t, d["height"], marker="v", ms=6.5, mfc="white", mec=DEFICIT_COLOR, mew=1.6, zorder=4)
+        ax.annotate(txt, xy=(t, d["height"]),
+                    xytext=(t, d["height"] - (0.15 if "\n" in txt else 0.11) * span), textcoords="data",
+                    ha="center", va="center", fontsize=10, color=text_color, zorder=5,
+                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=DEFICIT_COLOR, lw=0.6, alpha=0.9))
 
     # Compass labels every 15° (N/E/S/W), tick marks every 5°, light grid,
     # small radial labels
@@ -1009,7 +1114,7 @@ def _draw_curvigram_polar(
     if title:
         ax.set_title(title, fontsize=14, fontweight="semibold", color=text_color, loc="left", pad=22)
 
-    if label or draw_reference_lines or show_three_sigma or lunar_lines or null_band is not None or (significant is not None and np.any(significant)):
+    if label or draw_reference_lines or show_three_sigma or lunar_lines or null_band is not None or (significant is not None and np.any(significant)) or (deficit_mask is not None and np.any(deficit_mask)):
         ax.legend(fontsize=10, loc="upper left", bbox_to_anchor=(1.08, 1.0),
                   borderaxespad=0.0, frameon=True, framealpha=0.92,
                   edgecolor="0.85", fancybox=False, borderpad=0.6)
@@ -1066,6 +1171,8 @@ def plot_curvigram(
     show_three_sigma: bool = False,
     xpad_deg: float = 10.0,
     lunar_lines: dict | None = None,
+    test_deficits: bool = False,
+    show_p_values: bool = True,
 ) -> tuple[plt.Figure, plt.Axes, np.ndarray, np.ndarray, np.ndarray, dict]:
     """Plots a renormalized adaptive curvigram of azimuths or declinations.
     Used by `Azimuth.plot_az_adaptive` and `Declination.plot_decl_adaptive`,
@@ -1212,6 +1319,20 @@ def plot_curvigram(
     lunar_lines : dict | None
         Positions (degrees) of the lunar standstill lines to draw, as
         {"major": [...], "minor": [...]}. Default: None (none)
+    test_deficits : bool
+        Also test for significant deficits: dips where there are fewer
+        structures than the null model explains. Random datasets record their
+        lowest point anywhere on the curve, and dips below the
+        (100 - `null_percentile`)th percentile of those minima are filled in
+        a contrasting colour, marked with a downward triangle and listed in
+        `info['deficits_significant']`. Testing both peaks and deficits, each
+        at 1%, gives up to about 2% false alarms in total. Requires
+        `draw_thresholds=True`. Default: False
+    show_p_values : bool
+        Write each labelled peak's (and deficit's) p-value under its angle.
+        The p-value is the share of random datasets whose most extreme point,
+        anywhere on the curve, reaches the observed value: a p-value for the
+        whole curve, consistent with the significance test. Default: True
     show_null_range : bool
         Draw a light gray band from the null model's expected curve up to the
         99th percentile of its random datasets at each position: random data
@@ -1255,12 +1376,18 @@ def plot_curvigram(
             The plotted curve: mean-centered density divided by the mean
             standard deviation of the null-model densities
         info : dict
-            'three_sigma_level', 'global_threshold',
-            'global_threshold_percentile', 'mean_null_std',
-            'null_expectation' (the null model's expected density on the
-            grid with `show_null_model=True`, else None), and the peak
-            lists 'peaks_all' and 'peaks_significant' (dicts with 'angle',
-            'height', 'prominence', 'index')
+            'three_sigma_level'; 'global_threshold' (significance threshold for
+            peaks) and 'global_threshold_percentile'; 'mean_null_std';
+            'null_expectation' (the null model's expected density on the grid
+            with `show_null_model=True`, else None); 'n_null' (number of random
+            datasets behind the threshold and the p-values); 'global_p_value'
+            (p-value of the curve's highest point: how often random orientation
+            produces a peak this high anywhere on the curve); the peak lists
+            'peaks_all' and 'peaks_significant' (dicts with 'angle', 'height',
+            'prominence', 'index', 'p_value'); and, with `test_deficits=True`,
+            'deficit_threshold', 'deficits_all', 'deficits_significant' (same
+            keys, 'height' being the depth of the dip) and
+            'global_deficit_p_value' (otherwise None or empty)
 
     Raises
     ------
@@ -1291,6 +1418,9 @@ def plot_curvigram(
 
     if polar and show_null_model:
         raise ValueError("`show_null_model` is not available with `polar=True`.")
+
+    if test_deficits and not draw_thresholds:
+        raise ValueError("`test_deficits=True` requires `draw_thresholds=True`.")
 
     view = str(view).lower()
     if view not in ("excess", "density"):
@@ -1366,9 +1496,11 @@ def plot_curvigram(
     # Global threshold (percentile of null maxima), if requested
     thr_global = None
     mean_null_std = None
+    null_maxima = None
+    null_minima = None
     if draw_thresholds:
         thr_iters = iterations if null_iterations is None else null_iterations
-        thr_global, _null_maxima, mean_null_std = estimate_null_max_threshold_adaptive(
+        thr_global, null_maxima, mean_null_std, null_minima = estimate_null_max_threshold_adaptive(
             n_samples=len(np.asarray(data)),
             h_epa=np.asarray(binwidths, dtype=float),
             curvigram_fn=curvigram_fn,
@@ -1383,7 +1515,28 @@ def plot_curvigram(
             rng=rng,
             null_sampler=null_sampler,
             renormalization=renormalization,
+            return_minima=True,
         )
+    thr_low = float(np.percentile(null_minima, 100.0 - null_percentile)) if test_deficits else None
+    n_null = int(null_maxima.size) if null_maxima is not None else 0
+
+    def _with_p(items, side):
+        """Adds 'p_value' to peak/dip dicts (None without null curves)."""
+        null = null_maxima if side == "greater" else null_minima
+        if null is not None and len(items):
+            pv = monte_carlo_p_values([it["height"] for it in items], null, side)
+            for it, p in zip(items, pv):
+                it["p_value"] = float(p)
+        else:
+            for it in items:
+                it["p_value"] = None
+        return items
+
+    def _label(item):
+        txt = f"{item['angle']:.1f}°"
+        if show_p_values and item.get("p_value") is not None:
+            txt += "\n" + format_p_value(item["p_value"], n_null)
+        return txt
 
     if polar:
         x = np.asarray(new_az)[:, 0]
@@ -1394,7 +1547,11 @@ def plot_curvigram(
             peaks_all = find_circular_peaks(
                 x_deg=x, y=y, min_separation_deg=min_peak_separation_deg, prominence=peak_prominence
             )
-            peaks_sig = [p for p in peaks_all if p["height"] >= thr_used]
+            peaks_sig = [p for p in _with_p(peaks_all, "greater") if p["height"] >= thr_used]
+        deficits_all, deficits_sig = [], []
+        if test_deficits:
+            deficits_all = _with_p(_find_deficits(x, y, True, min_peak_separation_deg, peak_prominence), "less")
+            deficits_sig = [d for d in deficits_all if d["height"] <= thr_low]
 
         fig, ax, created_fig = _draw_curvigram_polar(
             x, y, ax=ax, ref_lines=ref_lines, title=title, label=label,
@@ -1402,7 +1559,10 @@ def plot_curvigram(
             three_sigma_level=three_sigma_level, draw_reference_lines=draw_reference_lines,
             peaks_sig=peaks_sig, significant=y >= thr_used,
             null_band=(null_stats["excess_expected"], null_stats["excess_hi"]) if show_null_range else None,
-            show_three_sigma=show_three_sigma, lunar_lines=lunar_lines)
+            show_three_sigma=show_three_sigma, lunar_lines=lunar_lines,
+            peak_texts=[_label(p) for p in peaks_sig], deficits_sig=deficits_sig,
+            deficit_texts=[_label(d) for d in deficits_sig],
+            deficit_mask=(y <= thr_low) if test_deficits else None)
 
         if created_fig:
             fig.tight_layout()
@@ -1418,6 +1578,15 @@ def plot_curvigram(
             "mean_null_std": mean_null_std,
             "peaks_all": peaks_all,
             "peaks_significant": peaks_sig,
+            "null_expectation": null_expectation,
+            "global_p_value": (float(monte_carlo_p_values(np.max(y), null_maxima)[0])
+                               if null_maxima is not None else None),
+            "n_null": n_null,
+            "deficit_threshold": thr_low,
+            "deficits_all": deficits_all,
+            "deficits_significant": deficits_sig,
+            "global_deficit_p_value": (float(monte_carlo_p_values(np.min(y), null_minima, "less")[0])
+                                       if (test_deficits and null_minima is not None) else None),
         }
         return fig, ax, new_az, normed_density, renorm_density, info
 
@@ -1483,6 +1652,15 @@ def plot_curvigram(
     if sig_plot.any():
         ax.fill_between(x_plot, 0, y_plot, where=sig_plot, alpha=min(1.0, fill_alpha * 2),
                         facecolor=fill_color, edgecolor="none", zorder=2.1, label="Significant")
+    if test_deficits:
+        deficit_plot = closed(y <= thr_low)
+        if deficit_plot.any():
+            # excess view: between the curve and 0; density view: between the
+            # data and the null model's expected density (the missing part)
+            base = 0 if view == "excess" else closed(E / unit)
+            ax.fill_between(x_plot, base, y_plot, where=deficit_plot, alpha=min(1.0, fill_alpha * 2),
+                            facecolor=DEFICIT_COLOR, edgecolor="none", zorder=2.1,
+                            label="Significant deficit")
     ax.plot(x_plot, y_plot, color=line_color, lw=1.6, zorder=3, label=label if label else None)
 
     # Axes cosmetics
@@ -1515,7 +1693,12 @@ def plot_curvigram(
     headroom = 0.18
     if is_az and draw_reference_lines and _azimuth_line_labels(ref_lines, lunar_lines, "0"):
         headroom = 0.38          # keep peak labels below the azimuth labels at the top
-    ax.set_ylim(y_min - (0.05 * span if view == "excess" else 0.0), y_max + headroom * span)
+    if show_p_values and null_maxima is not None:
+        headroom += 0.08         # two-line peak labels (angle and p-value)
+    bottom = 0.05 * span if view == "excess" else 0.0
+    if test_deficits and np.any(y <= thr_low):
+        bottom = 0.28 * span     # room for the deficit labels below the dips
+    ax.set_ylim(y_min - bottom, y_max + headroom * span)
 
     if show_three_sigma and view == "excess":      # optional; not a significance test
         ax.axhline(y=three_sigma_level, color=sigma_color, lw=1.1, ls=(0, (5, 4)),
@@ -1626,7 +1809,7 @@ def plot_curvigram(
             peaks_all = find_linear_peaks(
                 x_deg=x, y=y, min_separation_deg=min_peak_separation_deg, prominence=peak_prominence
             )           
-        peaks_sig = [p for p in peaks_all if p["height"] >= thr_used]
+        peaks_sig = [p for p in _with_p(peaks_all, "greater") if p["height"] >= thr_used]
         
         x_span = (xlim[1] - xlim[0]) or 1.0
         for p in peaks_sig:
@@ -1639,11 +1822,28 @@ def plot_curvigram(
             # they do not run into the axis numbers or out of the plot
             frac = (p["angle"] - xlim[0]) / x_span
             ha, dx = ("left", -4) if frac < 0.04 else (("right", 4) if frac > 0.96 else ("center", 0))
-            ax.annotate(f"{p['angle']:.1f}°",
+            ax.annotate(_label(p),
                         xy=(p["angle"], y_pk),
                         xytext=(dx, 8), textcoords="offset points",
                         ha=ha, va="bottom", fontsize=10, color=text_color, zorder=5,
                         bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.8", lw=0.6, alpha=0.9))
+
+    # Deficits (dips below the lower threshold), tested like the peaks
+    deficits_all, deficits_sig = [], []
+    if test_deficits:
+        deficits_all = _with_p(_find_deficits(x, y, is_az, min_peak_separation_deg, peak_prominence), "less")
+        deficits_sig = [d for d in deficits_all if d["height"] <= thr_low]
+        x_span = (xlim[1] - xlim[0]) or 1.0
+        for d in deficits_sig:
+            if not (min(xlim) <= d["angle"] <= max(xlim)):
+                continue
+            y_d = float(y_disp[d["index"]])
+            ax.plot(d["angle"], y_d, marker="v", ms=6.5, mfc="white", mec=DEFICIT_COLOR, mew=1.6, zorder=4)
+            frac = (d["angle"] - xlim[0]) / x_span
+            ha, dx = ("left", -4) if frac < 0.04 else (("right", 4) if frac > 0.96 else ("center", 0))
+            ax.annotate(_label(d), xy=(d["angle"], y_d), xytext=(dx, -9), textcoords="offset points",
+                        ha=ha, va="top", fontsize=10, color=text_color, zorder=5,
+                        bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=DEFICIT_COLOR, lw=0.6, alpha=0.9))
 
     if created_fig:
         fig.tight_layout()
@@ -1660,6 +1860,14 @@ def plot_curvigram(
         "peaks_all": peaks_all,
         "peaks_significant": peaks_sig,
         "null_expectation": null_expectation,
+        "global_p_value": (float(monte_carlo_p_values(np.max(y), null_maxima)[0])
+                       if null_maxima is not None else None),
+        "n_null": n_null,
+        "deficit_threshold": thr_low,
+        "deficits_all": deficits_all,
+        "deficits_significant": deficits_sig,
+        "global_deficit_p_value": (float(monte_carlo_p_values(np.min(y), null_minima, "less")[0])
+                           if (test_deficits and null_minima is not None) else None),
     }
     
     return fig, ax, new_az, normed_density, renorm_density, info

@@ -792,6 +792,8 @@ class Declination:
         xpad_deg: float = 10.0,
         draw_lunar_lines: bool = True,
         lunar_inclination_deg: float = 5.145,
+        test_deficits: bool = False,
+        show_p_values: bool = True,
     ) -> tuple[plt.Figure, plt.Axes, np.ndarray, np.ndarray, np.ndarray, dict]:
         """Plots the curvigram of declinations with per-point bin widths.
         See also: `self.curvigram_decl_adaptive` and `self.distribution_decl_adaptive`.
@@ -876,6 +878,20 @@ class Declination:
             near the horizon by about 0.9°, so treat them as guides. Default: True
         lunar_inclination_deg : float
             Inclination of the lunar orbit to the ecliptic. Default: 5.145
+        test_deficits : bool
+            Also test for significant deficits: dips where there are fewer
+            structures than the null model explains. Random datasets record their
+            lowest point anywhere on the curve, and dips below the
+            (100 - `null_percentile`)th percentile of those minima are filled in
+            a contrasting colour, marked with a downward triangle and listed in
+            `info['deficits_significant']`. Testing both peaks and deficits, each
+            at 1%, gives up to about 2% false alarms in total. Requires
+            `draw_thresholds=True`. Default: False
+        show_p_values : bool
+            Write each labelled peak's (and deficit's) p-value under its angle.
+            The p-value is the share of random datasets whose most extreme point,
+            anywhere on the curve, reaches the observed value: a p-value for the
+            whole curve, consistent with the significance test. Default: True
         grid_step : float
             Spacing of the evaluation grid in degrees. Default: 0.5
         normalize : str
@@ -977,10 +993,18 @@ class Declination:
                 The plotted curve: mean-centered density divided by the mean
                 standard deviation of the null-model densities
             info : dict
-                'three_sigma_level', 'global_threshold',
-                'global_threshold_percentile', 'mean_null_std', 'null_model',
-                and the peak lists 'peaks_all' and 'peaks_significant' (dicts
-                with 'angle', 'height', 'prominence', 'index')
+                'three_sigma_level'; 'global_threshold' (significance threshold for
+                peaks) and 'global_threshold_percentile'; 'mean_null_std'; 'null_model';
+                'null_expectation' (the null model's expected density on the grid
+                with `show_null_model=True`, else None); 'n_null' (number of random
+                datasets behind the threshold and the p-values); 'global_p_value'
+                (p-value of the curve's highest point: how often random orientation
+                produces a peak this high anywhere on the curve); the peak lists
+                'peaks_all' and 'peaks_significant' (dicts with 'angle', 'height',
+                'prominence', 'index', 'p_value'); and, with `test_deficits=True`,
+                'deficit_threshold', 'deficits_all', 'deficits_significant' (same
+                keys, 'height' being the depth of the dip) and
+                'global_deficit_p_value' (otherwise None or empty)
 
         Raises
         ------
@@ -1053,7 +1077,9 @@ class Declination:
                                        view=view,
                                        show_three_sigma=show_three_sigma,
                                        xpad_deg=xpad_deg,
-                                       lunar_lines=lunar_lines
+                                       lunar_lines=lunar_lines,
+                                       test_deficits=test_deficits,
+                                       show_p_values=show_p_values
                                        )
         result[-1]["null_model"] = str(null_model).lower()
         return result

@@ -65,12 +65,16 @@ declinations = np.r_[rng.normal(-23.5, 1, 12), rng.normal(0, 1, 8), rng.uniform(
 binwidths = np.full(declinations.size, 2.0)
 
 fig, ax, grid, density, curve, info = dec.plot_decl_adaptive(declinations, 45, binwidths, null_iterations=1000)
-print("Significant peaks at:", [p["angle"] for p in info["peaks_significant"]])
+print("Global p-value:", info["global_p_value"])
+for p in info["peaks_significant"]:
+    print(f"Significant peak at {p['angle']}°, p = {p['p_value']:.4f}")
 ```
 
 ![Declination curvigram with the default null model](docs/images/decl_curvigram.png)
 
-The curve shows how much more frequent each declination is than expected under a null model, in units of the null model's typical variation. Regions that pass the significance test (99th percentile of the highest peaks of random datasets) are filled in a strong colour and their peaks are labelled. Use `null_iterations` of at least 1000 for final results.
+The curve shows how much more frequent each declination is than expected under a null model, in units of the null model's typical variation. Regions that pass the significance test (99th percentile of the highest peaks of random datasets) are filled in a strong colour and their peaks are labelled with their angle and p-value. Use `null_iterations` of at least 1000 for final results.
+
+The p-value of a peak is the share of random datasets whose highest point, anywhere on the curve, reaches at least that height, estimated as (1 + k) / (1 + N) from the N random datasets. Because it compares against the highest point of whole random curves, it already accounts for checking every declination (a family-wise p-value), and significant peaks have p-values of about 0.01 or less. `info["global_p_value"]` is the p-value of the curve's highest point: whether there is any preference at all. The smallest p-value N random datasets can show is 1 / (N + 1), so labels then read e.g. "p ≤ 0.001"; increase `null_iterations` to resolve smaller values. `show_p_values=False` hides them from the labels.
 
 Reference lines mark the equinoxes (dotted), the solstices (solid) and the Moon's limits at the major (dashed) and minor (dash-dotted) standstills, about ±28.7° and ±18.4° (`draw_lunar_lines=False` hides the lunar ones). The x-axis is trimmed to the outermost structures ±10° (`xpad_deg`); pass `xlim=(-90, 90)` for the full range. Trimming only changes the view, not the results. Azimuth plots always show the full 0-360°, and there each solstice and lunar standstill line is labelled with its flat-horizon azimuth.
 
@@ -83,10 +87,15 @@ horizons = rng.uniform(0, 3, declinations.size)          # measured horizon alti
 dec.plot_decl_adaptive(declinations, latitudes, binwidths, null_altitudes=horizons, null_iterations=1000)
 ```
 
-- `"solar"`: the Sun's declination on random days of the year. Use it to ask whether particular dates (solstices, equinoxes, feast days) are preferred among solar orientations:
+- `"solar"`: the Sun's declination on random days of the year. Use it to ask whether particular dates (solstices, equinoxes, feast days) are preferred among solar orientations. With `test_deficits=True` dips are tested as well: significant deficits (fewer structures than the null model explains, e.g. dates that were avoided) are filled in red and labelled with their p-value. Testing both peaks and deficits, each at 1%, gives up to about 2% false alarms in total. Here 60 structures face sunrise on random days but avoid the weeks around the solstices, and 15 face the equinox sunrise:
 
 ```
-dec.plot_decl_adaptive(declinations, 45, binwidths, null_model="solar", null_iterations=1000)
+sun = dec.solar_declination_approx(rng.uniform(0, 365.2422, 4000), 23.56)
+solar_sites = np.r_[sun[np.abs(sun) < 19][:60], rng.normal(0, 1, 15)] + rng.normal(0, 1, 75)
+
+fig, ax, grid, density, curve, info = dec.plot_decl_adaptive(solar_sites, 45, np.full(75, 2.0), null_model="solar",
+                                                             test_deficits=True, null_iterations=1000)
+print("Significant deficits:", [(d["angle"], d["p_value"]) for d in info["deficits_significant"]])
 ```
 
 ![Declination curvigram against the solar null model](docs/images/decl_solar.png)

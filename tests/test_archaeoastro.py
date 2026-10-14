@@ -259,6 +259,42 @@ def test_auto_range_lunar_lines_and_band(decl, az):
     plt.close("all")
 
 
+def test_monte_carlo_p_values():
+    null = np.array([1.0, 2.0, 6.0])
+    np.testing.assert_allclose(HF.monte_carlo_p_values([5.0, 7.0], null), [2 / 4, 1 / 4])        # (1+k)/(1+N)
+    np.testing.assert_allclose(HF.monte_carlo_p_values([1.5], null, side="less"), [2 / 4])
+    assert HF.format_p_value(1 / 1001, 1000).startswith("p ≤")
+    assert HF.format_p_value(0.0123, 1000) == "p = 0.012"
+    with pytest.raises(ValueError):
+        HF.monte_carlo_p_values([1.0], [])
+
+
+def test_p_values_and_deficits(decl):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    rng = np.random.default_rng(7)
+    sol = decl.solar_declination_approx(rng.uniform(0, 365.2422, 4000), 23.56)
+    data = np.r_[sol[np.abs(sol) < 19.0][:60], rng.normal(0, 1, 15)] + rng.normal(0, 1, 75)
+    bw = np.full(data.size, 2.0)
+    *_, info = decl.plot_decl_adaptive(data, 45.0, bw, null_model="solar", test_deficits=True, iterations=100,
+                                       null_iterations=400, rng=np.random.default_rng(1), show=False)
+    assert info["n_null"] == 400
+    assert info["global_p_value"] <= 0.02 and info["global_deficit_p_value"] <= 0.02
+    assert all(p["p_value"] <= 0.02 for p in info["peaks_significant"])
+    angles = sorted(d["angle"] for d in info["deficits_significant"])          # solstices avoided
+    assert any(a < -18 for a in angles) and any(a > 18 for a in angles)
+    assert all(d["height"] <= info["deficit_threshold"] for d in info["deficits_significant"])
+    texts = [t.get_text() for t in plt.gca().texts]
+    assert any("\np" in t for t in texts)                                      # p-values in the labels
+    *_, info = decl.plot_decl_adaptive(data, 45.0, bw, iterations=20, null_iterations=40, show=False,
+                                       rng=np.random.default_rng(1))
+    assert info["deficits_all"] == [] and info["global_deficit_p_value"] is None
+    with pytest.raises(ValueError):
+        decl.plot_decl_adaptive(data, 45.0, bw, iterations=5, show=False, test_deficits=True, draw_thresholds=False)
+    plt.close("all")
+
+
 def test_orientation_null_is_calibrated(decl):
     # random orientations analysed with the matching null: ~1% false alarms at the 99th percentile
     n = 60
